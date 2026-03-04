@@ -6,3 +6,8 @@ export const prescriptionCreateSchema = z.object({
   doctor_reg_no: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
 });
+
+export const prescriptionLinkSchema = z.object({
+  invoice_id: z.number().int().positive(),
+  prescription_id: z.number().int().positive(),
+});

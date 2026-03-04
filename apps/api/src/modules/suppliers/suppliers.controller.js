@@ -1,6 +1,12 @@
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { auditLog } from "../../utils/audit.js";
-import { supplierCreateSchema, supplierUpdateSchema, supplierListSchema } from "./suppliers.schema.js";
+import {
+  supplierCreateSchema,
+  supplierUpdateSchema,
+  supplierListSchema,
+  supplierPaymentCreateSchema,
+  supplierPaymentsListSchema,
+} from "./suppliers.schema.js";
 import * as svc from "./suppliers.service.js";
 
 export const list = asyncHandler(async (req, res) => {
@@ -30,4 +36,32 @@ export const remove = asyncHandler(async (req, res) => {
   const out = await svc.remove(req.user.org_id, id);
   await auditLog({ org_id: req.user.org_id, branch_id: req.user.branch_id, user_id: req.user.user_id, action: "DELETE", entity: "supplier", entity_id: id, before, after: out, req });
   res.json(out);
+});
+
+export const listPayments = asyncHandler(async (req, res) => {
+  const supplierId = Number(req.params.id);
+  const input = supplierPaymentsListSchema.parse(req.query);
+  const rows = await svc.listPayments(req.user.org_id, supplierId, input);
+  res.json(rows);
+});
+
+export const addPayment = asyncHandler(async (req, res) => {
+  const supplierId = Number(req.params.id);
+  const input = supplierPaymentCreateSchema.parse(req.body);
+  const out = await svc.addPayment(
+    { org_id: req.user.org_id, branch_id: req.user.branch_id, user_id: req.user.user_id },
+    supplierId,
+    input
+  );
+  await auditLog({
+    org_id: req.user.org_id,
+    branch_id: req.user.branch_id,
+    user_id: req.user.user_id,
+    action: "CREATE",
+    entity: "supplier_payment",
+    entity_id: out.id,
+    after: out,
+    req,
+  });
+  res.status(201).json(out);
 });

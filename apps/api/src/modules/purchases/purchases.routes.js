@@ -9,6 +9,8 @@ r.use(authRequired);
 r.use(requireModule("PURCHASES"));
 
 r.get("/invoices", requirePerms(["PURCHASE_READ"]), ctrl.list);
+r.get("/invoices/:id", requirePerms(["PURCHASE_READ"]), ctrl.getOne);
 r.post("/invoices", requirePerms(["PURCHASE_CREATE"]), ctrl.create);
+r.post("/:id/returns", requirePerms(["PURCHASE_RETURN"]), ctrl.createReturn);
 
 export default r;

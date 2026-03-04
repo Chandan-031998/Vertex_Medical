@@ -20,3 +20,11 @@ export const purchaseListSchema = z.object({
   from: z.string().optional(),
   to: z.string().optional(),
 });
+
+export const purchaseReturnCreateSchema = z.object({
+  reason: z.string().max(255).optional().nullable(),
+  return_items: z.array(z.object({
+    batch_id: z.number().int().positive(),
+    qty: z.number().int().positive(),
+  })).min(1),
+});

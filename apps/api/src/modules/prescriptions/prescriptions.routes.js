@@ -16,12 +16,15 @@ const storage = multer.diskStorage({
   filename: (req, file, cb) => {
     const safe = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
     cb(null, `${Date.now()}_${safe}`);
-  }
+  },
 });
 
 const upload = multer({ storage });
 
-r.get("/", requirePerms(["BILLING_READ"]), ctrl.list);
-r.post("/", requirePerms(["BILLING_CREATE"]), upload.single("file"), ctrl.create);
+r.get("/", requirePerms(["PRESCRIPTION_READ"]), ctrl.list);
+r.get("/:id", requirePerms(["PRESCRIPTION_READ"]), ctrl.getOne);
+r.post("/", requirePerms(["PRESCRIPTION_WRITE"]), upload.single("file"), ctrl.create);
+r.post("/upload", requirePerms(["PRESCRIPTION_WRITE"]), upload.single("file"), ctrl.upload);
+r.post("/link", requirePerms(["PRESCRIPTION_WRITE"]), ctrl.link);
 
 export default r;

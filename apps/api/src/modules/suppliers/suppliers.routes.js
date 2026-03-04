@@ -9,9 +9,11 @@ r.use(authRequired);
 r.use(requireModule("PURCHASES"));
 
 r.get("/", requirePerms(["SUPPLIER_READ"]), ctrl.list);
+r.get("/:id/payments", requirePerms(["SUPPLIER_READ"]), ctrl.listPayments);
 r.post("/", requirePerms(["SUPPLIER_WRITE"]), ctrl.create);
 r.put("/:id", requirePerms(["SUPPLIER_WRITE"]), ctrl.update);
 r.patch("/:id", requirePerms(["SUPPLIER_WRITE"]), ctrl.update);
 r.delete("/:id", requireRoles(["ADMIN"]), ctrl.remove);
+r.post("/:id/payments", requirePerms(["SUPPLIER_PAYMENT_WRITE"]), ctrl.addPayment);
 
 export default r;

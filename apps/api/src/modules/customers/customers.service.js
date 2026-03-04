@@ -1,4 +1,5 @@
 import { pool } from "../../db/pool.js";
+import { withTx } from "../../db/tx.js";
 
 export async function list(org_id, { q }) {
   const params = [org_id];
@@ -35,6 +36,95 @@ export async function getById(org_id, id) {
     [id, org_id]
   );
   return rows?.[0] || null;
+}
+
+async function refreshCustomerBalance(conn, org_id, customer_id) {
+  try {
+    const [[agg]] = await conn.execute(
+      `SELECT COALESCE(SUM(debit - credit), 0) AS balance
+       FROM customer_ledger
+       WHERE org_id=? AND customer_id=?`,
+      [org_id, customer_id]
+    );
+    const balance = Number(agg?.balance || 0);
+    await conn.execute(
+      `UPDATE customers SET credit_balance=?, updated_at=CURRENT_TIMESTAMP WHERE id=? AND org_id=?`,
+      [Math.max(0, balance), customer_id, org_id]
+    );
+    return balance;
+  } catch (e) {
+    if (e?.code === "ER_NO_SUCH_TABLE") {
+      const [[fromInv]] = await conn.execute(
+        `SELECT COALESCE(SUM(amount_due), 0) AS due
+         FROM invoices
+         WHERE org_id=? AND customer_id=? AND status IN ('DUE', 'PARTIAL')`,
+        [org_id, customer_id]
+      );
+      const due = Number(fromInv?.due || 0);
+      await conn.execute(`UPDATE customers SET credit_balance=? WHERE id=? AND org_id=?`, [due, customer_id, org_id]);
+      return due;
+    }
+    throw e;
+  }
+}
+
+export async function listLedger(org_id, customer_id, { limit }) {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT id, ref_type, ref_id, debit, credit, notes, created_at
+       FROM customer_ledger
+       WHERE org_id=? AND customer_id=?
+       ORDER BY id DESC
+       LIMIT ?`,
+      [org_id, customer_id, limit]
+    );
+    return rows;
+  } catch (e) {
+    if (e?.code === "ER_NO_SUCH_TABLE") return [];
+    throw e;
+  }
+}
+
+export async function addPayment({ org_id, branch_id, user_id }, customer_id, input) {
+  return withTx(async (conn) => {
+    const customer = await getById(org_id, customer_id);
+    if (!customer) {
+      const err = new Error("Customer not found");
+      err.status = 404;
+      throw err;
+    }
+
+    let paymentId = null;
+    try {
+      const [payRes] = await conn.execute(
+        `INSERT INTO customer_payments (org_id, branch_id, customer_id, mode, amount, ref_no, notes, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [org_id, branch_id, customer_id, input.mode, input.amount, input.ref_no || null, input.notes || null, user_id]
+      );
+      paymentId = payRes.insertId;
+    } catch (e) {
+      if (e?.code !== "ER_NO_SUCH_TABLE") throw e;
+    }
+
+    try {
+      await conn.execute(
+        `INSERT INTO customer_ledger (org_id, branch_id, customer_id, ref_type, ref_id, debit, credit, notes, created_by)
+         VALUES (?, ?, ?, 'CUSTOMER_PAYMENT', ?, 0, ?, ?, ?)`,
+        [org_id, branch_id, customer_id, paymentId, input.amount, input.notes || `Customer payment via ${input.mode}`, user_id]
+      );
+    } catch (e) {
+      if (e?.code !== "ER_NO_SUCH_TABLE") throw e;
+    }
+
+    const balance = await refreshCustomerBalance(conn, org_id, customer_id);
+    const [rows] = await conn.execute(`SELECT * FROM customers WHERE id=? AND org_id=? LIMIT 1`, [customer_id, org_id]);
+
+    return {
+      payment_id: paymentId,
+      customer: rows?.[0] || null,
+      balance,
+    };
+  });
 }
 
 export async function update(org_id, id, patch) {

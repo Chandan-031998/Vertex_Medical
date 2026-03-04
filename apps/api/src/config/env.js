@@ -22,6 +22,7 @@ const EnvSchema = z.object({
 
   CORS_ORIGINS: z.string().default(""),
   UPLOAD_DIR: z.string().default("uploads"),
+  PUBLIC_APP_URL: z.string().default("http://localhost:5173"),
 });
 
 export const env = EnvSchema.parse(process.env);

@@ -7,6 +7,14 @@ export const branchCreateSchema = z.object({
   phone: z.string().optional().nullable(),
 });
 
+export const branchUpdateSchema = z.object({
+  name: z.string().min(2).optional(),
+  code: z.string().min(2).max(30).optional(),
+  address: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  is_active: z.number().int().min(0).max(1).optional(),
+});
+
 export const userCreateSchema = z.object({
   name: z.string().min(2),
   email: z.string().email(),

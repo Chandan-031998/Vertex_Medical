@@ -40,6 +40,58 @@ export async function createBranch(org_id, input) {
   return rows[0];
 }
 
+export async function getBranchById(org_id, branchId) {
+  const [rows] = await pool.execute(
+    `SELECT id, name, code, address, phone, is_active, created_at
+     FROM branches
+     WHERE id=? AND org_id=?
+     LIMIT 1`,
+    [branchId, org_id]
+  );
+  return rows?.[0] || null;
+}
+
+export async function updateBranch(org_id, branchId, patch) {
+  const current = await getBranchById(org_id, branchId);
+  if (!current) {
+    const err = new Error("Branch not found");
+    err.status = 404;
+    throw err;
+  }
+
+  const fields = [];
+  const values = [];
+  if (patch.name !== undefined) {
+    fields.push("name=?");
+    values.push(patch.name);
+  }
+  if (patch.code !== undefined) {
+    fields.push("code=?");
+    values.push(patch.code);
+  }
+  if (patch.address !== undefined) {
+    fields.push("address=?");
+    values.push(patch.address);
+  }
+  if (patch.phone !== undefined) {
+    fields.push("phone=?");
+    values.push(patch.phone);
+  }
+  if (patch.is_active !== undefined) {
+    fields.push("is_active=?");
+    values.push(patch.is_active);
+  }
+
+  if (!fields.length) return current;
+
+  values.push(branchId, org_id);
+  await pool.execute(
+    `UPDATE branches SET ${fields.join(", ")} WHERE id=? AND org_id=?`,
+    values
+  );
+  return getBranchById(org_id, branchId);
+}
+
 export async function listRoles(org_id) {
   const [rows] = await pool.execute(
     `SELECT id, name, role_key, description, is_system, is_active AS active, created_at

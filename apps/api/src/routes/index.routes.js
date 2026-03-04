@@ -13,6 +13,7 @@ import reportsRoutes from "../modules/reports/reports.routes.js";
 import prescriptionsRoutes from "../modules/prescriptions/prescriptions.routes.js";
 import complianceRoutes from "../modules/compliance/compliance.routes.js";
 import settingsRoutes from "../modules/settings/settings.routes.js";
+import branchesRoutes from "../modules/branches/branches.routes.js";
 
 const router = Router();
 
@@ -31,5 +32,6 @@ router.use("/api/reports", reportsRoutes);
 router.use("/api/prescriptions", prescriptionsRoutes);
 router.use("/api/compliance", complianceRoutes);
 router.use("/api/settings", settingsRoutes);
+router.use("/api/branches", branchesRoutes);
 
 export default router;

@@ -7,6 +7,7 @@ import Button from "../components/ui/Button.jsx";
 import Modal from "../components/ui/Modal.jsx";
 import Input from "../components/ui/Input.jsx";
 import { useToast } from "../components/ui/ToastProvider.jsx";
+import { useAuth } from "../auth/AuthProvider.jsx";
 
 const GROUP_TITLES = {
   BRANCH: "Admin / Setup",
@@ -44,6 +45,7 @@ function groupPermissions(perms) {
 }
 
 export default function SettingsRoles() {
+  const auth = useAuth();
   const toast = useToast();
   const [roles, setRoles] = useState([]);
   const [permissions, setPermissions] = useState([]);
@@ -59,6 +61,7 @@ export default function SettingsRoles() {
   const [checked, setChecked] = useState(new Set());
 
   const groups = useMemo(() => groupPermissions(permissions), [permissions]);
+  const canManageRoles = auth.can("USER_ADMIN") || auth.can("ROLE_WRITE");
 
   async function load() {
     setLoading(true);
@@ -89,13 +92,13 @@ export default function SettingsRoles() {
       label: "",
       render: (r) => (
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => openEditRole(r)}>Edit</Button>
-          <Button variant="secondary" onClick={() => openPermEditor(r)}>Permissions</Button>
-          {!Number(r.is_system) ? <Button variant="danger" onClick={() => deleteRole(r.id)}>Delete</Button> : null}
+          <Button variant="secondary" onClick={() => openEditRole(r)} disabled={!canManageRoles}>Edit</Button>
+          <Button variant="secondary" onClick={() => openPermEditor(r)} disabled={!canManageRoles}>Permissions</Button>
+          {!Number(r.is_system) ? <Button variant="danger" onClick={() => deleteRole(r.id)} disabled={!canManageRoles}>Delete</Button> : null}
         </div>
       ),
     },
-  ], []);
+  ], [canManageRoles]);
 
   function openEditRole(role) {
     setEditForm({
@@ -191,7 +194,7 @@ export default function SettingsRoles() {
       <Card>
         <CardHeader
           title="Roles & Permissions"
-          right={<Button onClick={() => setOpenCreate(true)}>+ Create Role</Button>}
+      right={<Button onClick={() => setOpenCreate(true)} disabled={!canManageRoles}>+ Create Role</Button>}
         />
         <CardBody>
           {loading ? <div className="text-sm text-slate-500">Loading...</div> : <Table columns={columns} rows={roles} rowKey="id" />}
@@ -205,7 +208,7 @@ export default function SettingsRoles() {
         footer={(
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => setOpenCreate(false)}>Cancel</Button>
-            <Button onClick={createRole}>Create</Button>
+            <Button onClick={createRole} disabled={!canManageRoles}>Create</Button>
           </div>
         )}
       >
@@ -227,7 +230,7 @@ export default function SettingsRoles() {
         footer={(
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => setOpenEdit(false)}>Cancel</Button>
-            <Button onClick={updateRole}>Save</Button>
+            <Button onClick={updateRole} disabled={!canManageRoles}>Save</Button>
           </div>
         )}
       >
@@ -249,7 +252,7 @@ export default function SettingsRoles() {
         footer={(
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => setOpenPerms(false)}>Cancel</Button>
-            <Button onClick={savePermissions}>Save Permissions</Button>
+            <Button onClick={savePermissions} disabled={!canManageRoles}>Save Permissions</Button>
           </div>
         )}
       >
@@ -264,6 +267,7 @@ export default function SettingsRoles() {
                       type="checkbox"
                       checked={checked.has(p.perm_key)}
                       onChange={() => togglePerm(p.perm_key)}
+                      disabled={!canManageRoles}
                     />
                     <span>{p.perm_key}</span>
                   </label>

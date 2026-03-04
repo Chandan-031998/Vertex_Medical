@@ -9,6 +9,8 @@ r.use(authRequired);
 r.use(requireModule("CUSTOMERS"));
 
 r.get("/", requirePerms(["CUSTOMER_READ"]), ctrl.list);
+r.get("/:id/ledger", requirePerms(["CUSTOMER_READ"]), ctrl.ledger);
+r.post("/:id/payments", requirePerms(["CUSTOMER_LEDGER_WRITE"]), ctrl.addPayment);
 r.post("/", requirePerms(["CUSTOMER_WRITE"]), ctrl.create);
 r.put("/:id", requirePerms(["CUSTOMER_WRITE"]), ctrl.update);
 r.patch("/:id", requirePerms(["CUSTOMER_WRITE"]), ctrl.update);

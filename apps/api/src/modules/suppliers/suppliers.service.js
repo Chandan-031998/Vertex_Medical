@@ -82,3 +82,70 @@ export async function remove(org_id, id) {
   );
   return { ok: true };
 }
+
+export async function listPayments(org_id, supplier_id, { limit }) {
+  const supplier = await getById(org_id, supplier_id);
+  if (!supplier) {
+    const err = new Error("Supplier not found");
+    err.status = 404;
+    throw err;
+  }
+  try {
+    const [rows] = await pool.execute(
+      `SELECT id, supplier_id, amount, method, ref_no, paid_at, notes, created_by, created_at
+       FROM supplier_payments
+       WHERE org_id=? AND supplier_id=?
+       ORDER BY paid_at DESC, id DESC
+       LIMIT ?`,
+      [org_id, supplier_id, limit]
+    );
+    return rows;
+  } catch (e) {
+    if (e?.code === "ER_NO_SUCH_TABLE") {
+      const err = new Error("supplier_payments table missing. Run 2026_03_supplier_payments_purchase_returns.sql");
+      err.status = 500;
+      throw err;
+    }
+    throw e;
+  }
+}
+
+export async function addPayment({ org_id, branch_id, user_id }, supplier_id, input) {
+  const supplier = await getById(org_id, supplier_id);
+  if (!supplier) {
+    const err = new Error("Supplier not found");
+    err.status = 404;
+    throw err;
+  }
+  try {
+    const [res] = await pool.execute(
+      `INSERT INTO supplier_payments (org_id, branch_id, supplier_id, amount, method, ref_no, paid_at, notes, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, NOW()), ?, ?)`,
+      [
+        org_id,
+        branch_id,
+        supplier_id,
+        input.amount,
+        input.method,
+        input.ref_no || null,
+        input.paid_at || null,
+        input.notes || null,
+        user_id,
+      ]
+    );
+    const [rows] = await pool.execute(
+      `SELECT id, supplier_id, amount, method, ref_no, paid_at, notes, created_by, created_at
+       FROM supplier_payments
+       WHERE id=? AND org_id=? LIMIT 1`,
+      [res.insertId, org_id]
+    );
+    return rows[0];
+  } catch (e) {
+    if (e?.code === "ER_NO_SUCH_TABLE") {
+      const err = new Error("supplier_payments table missing. Run 2026_03_supplier_payments_purchase_returns.sql");
+      err.status = 500;
+      throw err;
+    }
+    throw e;
+  }
+}

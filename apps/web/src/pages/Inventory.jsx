@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { api } from "../api/http.js";
+import { api, getApiErrorMessage } from "../api/http.js";
 import { endpoints } from "../api/endpoints.js";
 import Table from "../components/ui/Table.jsx";
 import Button from "../components/ui/Button.jsx";
@@ -8,8 +8,12 @@ import Input from "../components/ui/Input.jsx";
 import { Card, CardHeader, CardBody } from "../components/ui/Card.jsx";
 import ConfirmModal from "../components/ui/ConfirmModal.jsx";
 import { useToast } from "../components/ui/ToastProvider.jsx";
+import { useAuth } from "../auth/AuthProvider.jsx";
+import { useNavigate } from "react-router-dom";
 
 export default function Inventory() {
+  const auth = useAuth();
+  const navigate = useNavigate();
   const toast = useToast();
   const [q, setQ] = useState("");
   const [stock, setStock] = useState([]);
@@ -21,6 +25,7 @@ export default function Inventory() {
   const [adjust, setAdjust] = useState({ batch_id: "", qty_delta: 0, reason: "" });
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const bootstrapped = React.useRef(false);
 
   const load = async () => {
     const s = await api.get(endpoints.stock, { params: { q }});
@@ -33,7 +38,14 @@ export default function Inventory() {
     setAdjustments(a.data || []);
   };
 
-  useEffect(() => { load().catch(()=>{}); }, []); // initial
+  useEffect(() => {
+    if (bootstrapped.current) return;
+    bootstrapped.current = true;
+    load().catch((e) => {
+      const msg = getApiErrorMessage(e, "Failed to load inventory");
+      if (msg) toast.error(msg);
+    });
+  }, []); // initial
   useEffect(() => {
     const t = setTimeout(() => { load().catch(()=>{}); }, 400);
     return () => clearTimeout(t);
@@ -65,6 +77,53 @@ export default function Inventory() {
     { key: "expiry_date", label: "Expiry" },
     { key: "qty", label: "Qty" },
     { key: "schedule_type", label: "Schedule" },
+    { key: "is_blocked", label: "Blocked", render: (r) => Number(r.is_blocked || 0) === 1 ? "Yes" : "No" },
+    {
+      key: "actions",
+      label: "",
+      render: (r) => (
+        <div className="flex gap-2">
+          {auth.canAny(["INVENTORY_WRITE", "NEAR_EXPIRY_VIEW"]) ? (
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                try {
+                  await api.post(endpoints.blockBatch, { batch_id: Number(r.batch_id), blocked: Number(r.is_blocked || 0) !== 1 });
+                  toast.success(Number(r.is_blocked || 0) === 1 ? "Batch unblocked" : "Batch blocked");
+                  await load();
+                } catch (e) {
+                  const msg = getApiErrorMessage(e, "Block batch failed");
+                  if (msg) toast.error(msg);
+                }
+              }}
+            >
+              {Number(r.is_blocked || 0) === 1 ? "Unblock Batch" : "Block Batch"}
+            </Button>
+          ) : null}
+          {auth.canAny(["INVENTORY_WRITE", "STOCK_ADJUST_CREATE", "DEAD_STOCK_VIEW"]) ? (
+            <Button
+              variant="danger"
+              onClick={async () => {
+                const qtyStr = window.prompt(`Mark dead stock qty for batch ${r.batch_no}`, "1");
+                const qty = Number(qtyStr || 0);
+                if (!qty || qty <= 0) return;
+                const reason = window.prompt("Reason", "Expired / damaged") || "Dead stock";
+                try {
+                  await api.post(endpoints.markDeadStock, { batch_id: Number(r.batch_id), qty, reason });
+                  toast.success("Marked as dead stock");
+                  await load();
+                } catch (e) {
+                  const msg = getApiErrorMessage(e, "Mark dead stock failed");
+                  if (msg) toast.error(msg);
+                }
+              }}
+            >
+              Mark Dead Stock
+            </Button>
+          ) : null}
+        </div>
+      ),
+    },
   ], []);
 
   const adjCols = useMemo(() => [
@@ -90,7 +149,8 @@ export default function Inventory() {
       toast.success("Stock adjusted");
       await load();
     } catch (e) {
-      toast.error(e?.response?.data?.message || "Adjust failed");
+      const msg = getApiErrorMessage(e, "Adjust failed");
+      if (msg) toast.error(msg);
     }
   };
 
@@ -103,7 +163,8 @@ export default function Inventory() {
       setConfirmDelete(null);
       await load();
     } catch (e) {
-      toast.error(e?.response?.data?.message || "Delete adjustment failed");
+      const msg = getApiErrorMessage(e, "Delete adjustment failed");
+      if (msg) toast.error(msg);
     } finally {
       setDeleting(false);
     }
@@ -112,7 +173,14 @@ export default function Inventory() {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader title="Inventory Stock (Batch-wise)" />
+        <CardHeader
+          title="Inventory Stock (Batch-wise)"
+          right={
+            auth.canAny(["STOCK_TRANSFER_CREATE", "INVENTORY_WRITE"]) ? (
+              <Button variant="secondary" onClick={() => navigate("/inventory/transfers")}>Transfer Stock</Button>
+            ) : null
+          }
+        />
         <CardBody>
           <div className="mb-4">
             <Input label="Search (medicine / salt / batch / barcode)" value={q} onChange={(e)=>setQ(e.target.value)} />

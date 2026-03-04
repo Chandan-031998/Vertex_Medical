@@ -313,7 +313,7 @@ CREATE TABLE IF NOT EXISTS stock_movements (
   org_id BIGINT UNSIGNED NOT NULL,
   branch_id BIGINT UNSIGNED NOT NULL,
   batch_id BIGINT UNSIGNED NOT NULL,
-  move_type ENUM('PURCHASE','SALE','TRANSFER_OUT','TRANSFER_IN','RETURN_IN','RETURN_OUT','ADJUST') NOT NULL,
+  move_type ENUM('PURCHASE','SALE','TRANSFER_OUT','TRANSFER_IN','RETURN_IN','RETURN_OUT','ADJUST','PURCHASE_RETURN') NOT NULL,
   qty_delta INT NOT NULL,
   ref_table VARCHAR(60) NULL,
   ref_id BIGINT UNSIGNED NULL,
@@ -415,6 +415,43 @@ CREATE TABLE IF NOT EXISTS purchase_items (
   CONSTRAINT fk_pit_batch FOREIGN KEY (batch_id) REFERENCES batches(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS purchase_returns (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  org_id BIGINT UNSIGNED NOT NULL,
+  branch_id BIGINT UNSIGNED NOT NULL,
+  purchase_id BIGINT UNSIGNED NOT NULL,
+  return_no VARCHAR(60) NOT NULL,
+  reason VARCHAR(255) NULL,
+  status ENUM('POSTED','VOID') NOT NULL DEFAULT 'POSTED',
+  created_by BIGINT UNSIGNED NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_pr_org_no (org_id, return_no),
+  KEY idx_pr_purchase (purchase_id),
+  CONSTRAINT fk_pr_org FOREIGN KEY (org_id) REFERENCES orgs(id),
+  CONSTRAINT fk_pr_branch FOREIGN KEY (branch_id) REFERENCES branches(id),
+  CONSTRAINT fk_pr_purchase FOREIGN KEY (purchase_id) REFERENCES purchase_invoices(id),
+  CONSTRAINT fk_pr_user FOREIGN KEY (created_by) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS purchase_return_items (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  purchase_return_id BIGINT UNSIGNED NOT NULL,
+  purchase_item_id BIGINT UNSIGNED NULL,
+  batch_id BIGINT UNSIGNED NOT NULL,
+  qty INT NOT NULL,
+  rate DECIMAL(10,2) NOT NULL,
+  gst_rate DECIMAL(5,2) NOT NULL,
+  amount DECIMAL(12,2) NOT NULL,
+  PRIMARY KEY (id),
+  KEY idx_pri_return (purchase_return_id),
+  KEY idx_pri_item (purchase_item_id),
+  KEY idx_pri_batch (batch_id),
+  CONSTRAINT fk_pri_return FOREIGN KEY (purchase_return_id) REFERENCES purchase_returns(id) ON DELETE CASCADE,
+  CONSTRAINT fk_pri_item FOREIGN KEY (purchase_item_id) REFERENCES purchase_items(id),
+  CONSTRAINT fk_pri_batch FOREIGN KEY (batch_id) REFERENCES batches(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ---------------------------
 -- BILLING / POS
 -- ---------------------------
@@ -475,6 +512,26 @@ CREATE TABLE IF NOT EXISTS payments (
   PRIMARY KEY (id),
   KEY idx_pay_inv (invoice_id),
   CONSTRAINT fk_pay_inv FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS supplier_payments (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  org_id BIGINT UNSIGNED NOT NULL,
+  branch_id BIGINT UNSIGNED NOT NULL,
+  supplier_id BIGINT UNSIGNED NOT NULL,
+  amount DECIMAL(12,2) NOT NULL,
+  method ENUM('CASH','UPI','CARD','BANK') NOT NULL,
+  ref_no VARCHAR(80) NULL,
+  paid_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  notes VARCHAR(255) NULL,
+  created_by BIGINT UNSIGNED NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_sp_org_supplier (org_id, supplier_id, paid_at),
+  CONSTRAINT fk_sp_org FOREIGN KEY (org_id) REFERENCES orgs(id),
+  CONSTRAINT fk_sp_branch FOREIGN KEY (branch_id) REFERENCES branches(id),
+  CONSTRAINT fk_sp_supplier FOREIGN KEY (supplier_id) REFERENCES suppliers(id),
+  CONSTRAINT fk_sp_user FOREIGN KEY (created_by) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ---------------------------
@@ -796,10 +853,12 @@ INSERT INTO permissions (perm_key, name) VALUES
 ('BILLING_EXPORT','Export billing data'),
 ('PURCHASE_CREATE','Create purchases'),
 ('PURCHASE_READ','View purchases'),
+('PURCHASE_RETURN','Create purchase returns'),
 ('CUSTOMER_READ','Read customers'),
 ('CUSTOMER_WRITE','Create/Update customers'),
 ('SUPPLIER_READ','Read suppliers'),
 ('SUPPLIER_WRITE','Create/Update suppliers'),
+('SUPPLIER_PAYMENT_WRITE','Create supplier payments'),
 ('REPORTS_VIEW','View reports'),
 ('REPORTS_EXPORT','Export reports'),
 ('GST_EXPORT','Export GST reports'),
@@ -844,7 +903,7 @@ WHERE p.perm_key IN (
   'DASHBOARD_VIEW','REPORTS_VIEW','REPORTS_EXPORT','GST_EXPORT','TALLY_EXPORT',
   'COMPLIANCE_VIEW','SCHEDULE_H1_VIEW','AUDIT_LOG_VIEW',
   'BILLING_READ','BILLING_EXPORT','PURCHASE_READ','INVENTORY_READ',
-  'STOCK_TRANSFER_APPROVE','STOCK_ADJUST_APPROVE'
+  'STOCK_TRANSFER_APPROVE','STOCK_ADJUST_APPROVE','PURCHASE_RETURN'
 );
 
 -- Store Manager gets inventory + purchase + medicine/batch
@@ -852,7 +911,8 @@ INSERT IGNORE INTO role_permissions (role_id, permission_id)
 SELECT 3, p.id FROM permissions p
 WHERE p.perm_key IN (
   'DASHBOARD_VIEW','MEDICINE_READ','MEDICINE_WRITE','BATCH_READ','BATCH_WRITE',
-  'INVENTORY_READ','INVENTORY_WRITE','PURCHASE_CREATE','PURCHASE_READ','REPORTS_VIEW',
+  'INVENTORY_READ','INVENTORY_WRITE','PURCHASE_CREATE','PURCHASE_READ','PURCHASE_RETURN',
+  'SUPPLIER_READ','SUPPLIER_PAYMENT_WRITE','REPORTS_VIEW',
   'STOCK_TRANSFER_CREATE','STOCK_ADJUST_CREATE','DEAD_STOCK_VIEW','NEAR_EXPIRY_VIEW'
 );
 

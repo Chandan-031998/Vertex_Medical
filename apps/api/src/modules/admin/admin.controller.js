@@ -2,6 +2,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { auditLog } from "../../utils/audit.js";
 import {
   branchCreateSchema,
+  branchUpdateSchema,
   roleCreateSchema,
   rolePermissionsReplaceSchema,
   roleUpdateSchema,
@@ -20,6 +21,15 @@ export const createBranch = asyncHandler(async (req, res) => {
   const created = await svc.createBranch(req.user.org_id, input);
   await auditLog({ org_id: req.user.org_id, branch_id: req.user.branch_id, user_id: req.user.user_id, action: "CREATE", entity: "branch", entity_id: created.id, after: created, req });
   res.status(201).json(created);
+});
+
+export const updateBranch = asyncHandler(async (req, res) => {
+  const branchId = Number(req.params.id);
+  const input = branchUpdateSchema.parse(req.body);
+  const before = await svc.getBranchById(req.user.org_id, branchId);
+  const updated = await svc.updateBranch(req.user.org_id, branchId, input);
+  await auditLog({ org_id: req.user.org_id, branch_id: req.user.branch_id, user_id: req.user.user_id, action: "UPDATE", entity: "branch", entity_id: branchId, before, after: updated, req });
+  res.json(updated);
 });
 
 export const listRoles = asyncHandler(async (req, res) => {

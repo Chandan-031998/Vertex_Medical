@@ -22,7 +22,7 @@ function toTitle(segment) {
     .replace(/\b\w/g, (m) => m.toUpperCase());
 }
 
-export default function Topbar({ setCollapsed }) {
+export default function Topbar({ onMenuClick }) {
   const auth = useAuth();
   const location = useLocation();
   const [open, setOpen] = React.useState(false);
@@ -32,7 +32,7 @@ export default function Topbar({ setCollapsed }) {
     <header className="sticky top-0 z-30 border-b border-white/70 bg-white/70 px-6 py-4 shadow-sm backdrop-blur-xl">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Button variant="secondary" className="!px-3" onClick={() => setCollapsed((c) => !c)} icon={<Icon d={iconMenu} />}>
+          <Button variant="secondary" className="!px-3" onClick={onMenuClick} aria-label="Open navigation menu" icon={<Icon d={iconMenu} />}>
             Menu
           </Button>
           <div className="hidden items-center gap-1 text-sm text-slate-500 md:flex">
